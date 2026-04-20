@@ -77,9 +77,9 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; font-size:13
 .date-sep { color:rgba(255,255,255,.7); font-size:12px; }
 
 /* ── MAIN LAYOUT ─────────────────────────────── */
-.main { display:flex; }
-.content { flex:1; padding:12px; overflow:auto; }
-.sidebar { width:270px; background:#fff; border-left:1px solid #e0e0e0; padding:12px; display:flex; flex-direction:column; gap:12px; }
+.main { display:flex; align-items:flex-start; }
+.content { flex:0 0 60%; min-width:0; padding:12px; overflow:auto; }
+.sidebar { flex:0 0 40%; min-width:0; background:#fff; border-left:1px solid #e0e0e0; padding:12px; display:flex; flex-direction:column; gap:12px; }
 
 /* ── CARDS ───────────────────────────────────── */
 .card { background:#fff; border-radius:8px; padding:14px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
@@ -276,10 +276,6 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; font-size:13
           <option value="compare">So sánh kỳ này / kỳ trước</option>
           <option value="branch">Doanh thu theo chi nhánh</option>
         </select>
-        <select id="revenueMetric" onchange="renderBarChart()">
-          <option value="revenue">Theo doanh thu</option>
-          <option value="quantity">Theo số lượng</option>
-        </select>
       </div>
     </div>
     <div class="legend-indicator" id="barLegend"></div>
@@ -313,7 +309,7 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; font-size:13
 
   <!-- PIE CHART -->
   <div class="card" style="margin-bottom:0;">
-    <div class="card-title" style="font-size:12px;">PHÂN BỔ DOANH THU THEO CHI NHÁNH</div>
+    <div class="card-title" style="font-size:12px;">Top 5 chi nhánh doanh thu cao nhất</div>
     <div class="pie-wrap">
       <canvas id="pieChart"></canvas>
       <div class="pie-center">
@@ -440,17 +436,6 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; font-size:13
 ────────────────────────────────────────── */
 const ALL_BRANCHES = Array.from({length:30}, (_,i) => `Chi nhánh ${i+1}`);
 
-// Pre-compute a stable rank (0..29) for every branch based on its seed value.
-// Because each rank is a unique integer, revenue values derived from it are
-// guaranteed to be unique across all 30 branches.
-const BRANCH_RANK = (() => {
-  function _seed(b){ let h=0; for(let c of b) h=(h*31+c.charCodeAt(0))&0xffffffff; return Math.abs(h); }
-  function _first(b){ let s=_seed(b)%2147483647; s=(s*16807)%2147483647; return (s-1)/2147483646; }
-  const pairs = ALL_BRANCHES.map(b=>([b, _first(b)])).sort((a,b)=>a[1]-b[1]);
-  const map = {};
-  pairs.forEach(([b],i)=>{ map[b]=i; });
-  return map;
-})();
 
 const BRANCH_COLORS = [
   '#1abc9c','#3498db','#f39c12','#e74c3c','#9b59b6',
@@ -498,6 +483,10 @@ let stockSearchVal = '';
 
 // Charts
 let barChartInst = null, prodChartInst = null, pieChartInst = null, empChartInst = null;
+
+// Per-refresh data caches — cleared by refreshAll() so every filter change gives new numbers
+let _branchCache = {};
+let _productMap  = null;
 
 /* ──────────────────────────────────────────
    HELPERS
@@ -627,41 +616,41 @@ function applyCustomRange(){
 }
 
 /* ──────────────────────────────────────────
-   GENERATE BRANCH DATA (seeded by branch+date)
+   BRANCH DATA — random per refresh, cached within a single refresh cycle
+   so stats, bar chart, and pie chart all agree on the same numbers.
 ────────────────────────────────────────── */
-function seedRnd(seed){
-  // Simple LCG for reproducible randomness per seed
-  let s = seed % 2147483647;
-  return function(){ s = (s * 16807) % 2147483647; return (s-1) / 2147483646; };
-}
-
-function branchSeed(branch){
-  let h = 0; for(let c of branch) h = (h*31+c.charCodeAt(0)) & 0xffffffff; return Math.abs(h);
-}
+function R(){ return Math.random(); }   // shorthand
 
 function getBranchData(branch){
-  const r   = seedRnd(branchSeed(branch));
-  const N   = ALL_BRANCHES.length - 1;               // 29
-  const t   = BRANCH_RANK[branch] / N;               // 0.000 … 1.000  (unique per branch)
+  if(_branchCache[branch]) return _branchCache[branch];
+  _branchCache[branch] = {
+    branch,
+    revenue : Math.round(55e6 * Math.pow(75,  R())),  // 55M – 4.1B
+    qty     : Math.round(70   * Math.pow(220, R())),  // 70  – 15,400
+    prevRev : Math.round(55e6 * Math.pow(75,  R())),
+    prevQty : Math.round(70   * Math.pow(220, R())),
+    invoices: Math.round(15   * Math.pow(180, R())),   // 15  – 2,700
+    returns : Math.round(1    * Math.pow(150, R())),   // 1   – 150
+    imports : Math.round(2    * Math.pow(120, R())),   // 2   – 240
+    nccRet  : Math.round(1    * Math.pow(80,  R())),   // 1   – 80
+    retVal  : Math.round(1e6  * Math.pow(280, R())),   // 1M  – 280M
+    impVal  : Math.round(4e6  * Math.pow(180, R())),   // 4M  – 720M
+    nccVal  : Math.round(1e6  * Math.pow(160, R()))    // 1M  – 160M
+  };
+  return _branchCache[branch];
+}
 
-  // Revenue & qty use the unique rank → mathematically impossible for two branches to collide
-  const revenue = Math.round(55e6  * Math.pow(75, t));   // 55M – 4.125B
-  const qty     = Math.round(70    * Math.pow(220, t));   // 70  – 15,400
-
-  // Previous-period: shift rank by a fixed offset so prev ≠ curr but still unique
-  const tPrev   = ((BRANCH_RANK[branch] + 7) % (N + 1)) / N;
-  const prevRev = Math.round(55e6  * Math.pow(75, tPrev));
-  const prevQty = Math.round(70    * Math.pow(220, tPrev));
-
-  // Remaining fields use seeded random (stat cards — not compared across branches in a chart)
-  const invoices= Math.round(15    * Math.pow(180, r())); // 15  – 2,700
-  const returns = Math.round(1     * Math.pow(150, r())); // 1   – 150
-  const imports = Math.round(2     * Math.pow(120, r())); // 2   – 240
-  const nccRet  = Math.round(1     * Math.pow(80,  r())); // 1   – 80
-  const retVal  = Math.round(1e6   * Math.pow(280, r())); // 1M  – 280M
-  const impVal  = Math.round(4e6   * Math.pow(180, r())); // 4M  – 720M
-  const nccVal  = Math.round(1e6   * Math.pow(160, r())); // 1M  – 160M
-  return { branch, revenue, qty, prevRev, prevQty, invoices, returns, imports, nccRet, retVal, impVal, nccVal };
+/* Product map — also cached per refresh cycle */
+function getProductMap(){
+  if(_productMap) return _productMap;
+  _productMap = {};
+  PRODUCTS.forEach(p => {
+    _productMap[p] = {
+      revenue: Math.round(20000 * Math.pow(500, R())),
+      qty    : Math.round(5     * Math.pow(600, R()))
+    };
+  });
+  return _productMap;
 }
 
 /* ──────────────────────────────────────────
@@ -692,54 +681,41 @@ function renderStats(){
    BAR CHART
 ────────────────────────────────────────── */
 function renderBarChart(){
-  const mode   = document.getElementById('revenueMode').value;   // compare | branch
-  const metric = document.getElementById('revenueMetric').value; // revenue | quantity
-
+  const mode = document.getElementById('revenueMode').value; // compare | branch
   const legend = document.getElementById('barLegend');
   const ctx    = document.getElementById('barChart').getContext('2d');
   if(barChartInst){ barChartInst.destroy(); barChartInst=null; }
 
   if(mode === 'branch'){
-    // One bar per selected branch, sorted descending — ensureGap guarantees no equal bars
-    legend.innerHTML = `<div class="li-item"><div class="li-box" style="background:#1abc9c"></div> Kỳ này</div>`;
+    legend.innerHTML = `<div class="li-item"><div class="li-box" style="background:#1abc9c"></div> Doanh thu kỳ này</div>`;
     const items = selectedBranches.map(b => {
       const d = getBranchData(b);
-      return { label:b, val: metric==='revenue' ? d.revenue : d.qty };
+      return { label:b, val: d.revenue };
     }).sort((a,b)=>b.val-a.val);
-    const gappedVals = ensureGap(items.map(x=>x.val), 0.07);
-    items.forEach((x,i)=>x.val=gappedVals[i]);
+    ensureGap(items.map(x=>x.val), 0.07).forEach((v,i)=>items[i].val=v);
 
     barChartInst = new Chart(ctx,{
       type:'bar',
       data:{
         labels: items.map(x=>x.label),
-        datasets:[{
-          label: metric==='revenue' ? 'Doanh thu (TR)' : 'Số lượng',
-          data: items.map(x=>metric==='revenue'? x.val/1e6 : x.val),
+        datasets:[{ label:'Doanh thu', data:items.map(x=>x.val/1e6),
           backgroundColor: items.map((_,i)=>BRANCH_COLORS[i%BRANCH_COLORS.length]),
-          borderRadius:4
-        }]
+          borderRadius:4 }]
       },
-      options: barOpts(metric)
+      options: barOpts()
     });
   } else {
-    // Compare this vs last period — each branch is a group
     legend.innerHTML = `
       <div class="li-item"><div class="li-box" style="background:#1abc9c"></div> Kỳ này</div>
       <div class="li-item"><div class="li-box" style="background:#bdc3c7"></div> Kỳ trước</div>`;
     const items = selectedBranches.map(b => {
       const d = getBranchData(b);
-      return {
-        label:b,
-        curr: metric==='revenue' ? d.revenue/1e6 : d.qty,
-        prev: metric==='revenue' ? d.prevRev/1e6 : d.prevQty
-      };
+      return { label:b, curr: d.revenue/1e6, prev: d.prevRev/1e6 };
     }).sort((a,b)=>b.curr-a.curr);
-    // Ensure neither dataset has duplicate bars
-    const currGapped = ensureGap(items.map(x=>x.curr), 0.07);
-    const prevSorted = [...items.map((x,i)=>({i,v:x.prev}))].sort((a,b)=>b.v-a.v);
+    const currG = ensureGap(items.map(x=>x.curr), 0.07);
+    items.forEach((x,i)=>x.curr=currG[i]);
+    const prevSorted = items.map((x,i)=>({i,v:x.prev})).sort((a,b)=>b.v-a.v);
     ensureGap(prevSorted.map(x=>x.v), 0.07).forEach((v,j)=>{ items[prevSorted[j].i].prev=v; });
-    items.forEach((x,i)=>x.curr=currGapped[i]);
 
     barChartInst = new Chart(ctx,{
       type:'bar',
@@ -750,20 +726,20 @@ function renderBarChart(){
           { label:'Kỳ trước',data:items.map(x=>x.prev), backgroundColor:'#bdc3c7', borderRadius:3 }
         ]
       },
-      options: barOpts(metric)
+      options: barOpts()
     });
   }
 }
 
-function barOpts(metric){
+function barOpts(){
   return {
     responsive:true,
     plugins:{
       legend:{display:false},
-      tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}${metric==='revenue'?'TR':'sp'}` }}
+      tooltip:{ callbacks:{ label: c=>`${c.dataset.label}: ${c.parsed.y.toFixed(1)} TR` }}
     },
     scales:{
-      y:{ ticks:{ callback: v=>v+(metric==='revenue'?'M':'') }, grid:{color:'#f0f0f0'} },
+      y:{ ticks:{ callback: v=>v+'M' }, grid:{color:'#f0f0f0'} },
       x:{ grid:{display:false}, ticks:{maxRotation:35, font:{size:10}} }
     }
   };
@@ -777,21 +753,11 @@ function renderProductChart(){
   const ctx    = document.getElementById('productChart').getContext('2d');
   if(prodChartInst){ prodChartInst.destroy(); prodChartInst=null; }
 
-  // Aggregate product data across selected branches — squared for high variance
-  const map = {};
-  PRODUCTS.forEach(p => {
-    let val = 0;
-    selectedBranches.forEach(b => {
-      const r = seedRnd(branchSeed(b+p));
-      const rv = r();
-      // Log-scale per product+branch → top products massively outsell bottom ones
-      val += metric==='revenue' ? 20000 * Math.pow(500, rv) : 5 * Math.pow(600, rv);
-    });
-    map[p] = Math.round(val);
-  });
-
-  const sorted = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  // Guarantee every product bar is visibly different from the next
+  const pMap   = getProductMap();
+  const metric = document.getElementById('productMetric').value;
+  const sorted = PRODUCTS
+    .map(p=>([p, pMap[p][metric]]))
+    .sort((a,b)=>b[1]-a[1]).slice(0,10);
   const prodGapped = ensureGap(sorted.map(x=>x[1]), 0.09);
   sorted.forEach((x,i)=>x[1]=prodGapped[i]);
 
@@ -886,17 +852,11 @@ function renderEmployees(){
   const ctx = document.getElementById('empChart').getContext('2d');
   if(empChartInst){ empChartInst.destroy(); empChartInst=null; }
 
-  // Pick 5 consistent employees per selected set — squared for high variance
-  const key = selectedBranches.join('|');
-  const r = seedRnd(branchSeed(key));
-  const shuffled = [...EMP_NAMES].sort(()=>r()-0.5).slice(0,5);
-  // Log-scale: top employee can be 100× more than bottom → dramatic bar height differences
-  const rawVals = shuffled.map(()=>{ const v=r(); return Math.round(10e6 * Math.pow(200, v)); }); // 10M – 2B
-  // Pair names+vals, sort descending by val, then unzip
-  const paired = shuffled.map((n,i)=>({n,v:rawVals[i]})).sort((a,b)=>b.v-a.v);
-  // Guarantee no two employee bars are the same height
-  const empGapped = ensureGap(paired.map(x=>x.v), 0.12);
-  paired.forEach((x,i)=>x.v=empGapped[i]);
+  const shuffled = [...EMP_NAMES].sort(()=>R()-0.5).slice(0,5);
+  const paired   = shuffled
+    .map(n=>({ n, v: Math.round(10e6 * Math.pow(200, R())) }))
+    .sort((a,b)=>b.v-a.v);
+  ensureGap(paired.map(x=>x.v), 0.12).forEach((v,i)=>paired[i].v=v);
   const names = paired.map(x=>x.n);
   const vals  = paired.map(x=>x.v);
 
@@ -932,20 +892,18 @@ function generateExpiry(){
   let id=1;
   selectedBranches.forEach(branch => {
     const count = rnd(2,6);
-    const r = seedRnd(branchSeed('exp'+branch));
     for(let i=0;i<count;i++){
-      const days = Math.round(r()*60-10); // -10 to +50
+      const days = Math.round(R()*65-10); // -10 to +55
       const expDate = addDays(today(), days);
       allExpiryData.push({
         id: id++,
-        code: padId(Math.round(r()*99+1)),
-        name: PRODUCTS[Math.floor(r()*PRODUCTS.length)],
-        unit: UNITS[Math.floor(r()*UNITS.length)],
-        lot:  LOTS[Math.floor(r()*LOTS.length)],
-        expDate,
-        days,
-        sold:   Math.round(r()*200),
-        remain: Math.round(r()*200),
+        code: padId(Math.round(R()*99+1)),
+        name: PRODUCTS[Math.floor(R()*PRODUCTS.length)],
+        unit: UNITS[Math.floor(R()*UNITS.length)],
+        lot:  LOTS[Math.floor(R()*LOTS.length)],
+        expDate, days,
+        sold:   Math.round(R()*500),
+        remain: Math.round(R()*300),
         branch
       });
     }
@@ -1022,16 +980,15 @@ function generateStock(){
   let id=1;
   selectedBranches.forEach(branch => {
     const count = rnd(2,6);
-    const r = seedRnd(branchSeed('stk'+branch));
     for(let i=0;i<count;i++){
-      const minS = Math.round(r()*9700+300);
-      const maxS = minS + Math.round(r()*4000+500);
-      const curr = Math.round(r()*minS*0.3); // low stock
+      const minS = Math.round(R()*9700+300);
+      const maxS = minS + Math.round(R()*4000+500);
+      const curr = Math.round(R()*minS*0.25); // low stock
       allStockData.push({
         id: id++,
-        code: padId(Math.round(r()*99+1)),
-        name: PRODUCTS[Math.floor(r()*PRODUCTS.length)],
-        unit: UNITS[Math.floor(r()*UNITS.length)],
+        code: padId(Math.round(R()*99+1)),
+        name: PRODUCTS[Math.floor(R()*PRODUCTS.length)],
+        unit: UNITS[Math.floor(R()*UNITS.length)],
         minStock: minS, maxStock: maxS, current: curr,
         branch
       });
@@ -1197,6 +1154,9 @@ function renderStockPage(){ renderStockTableOnly(); }
    REFRESH ALL
 ────────────────────────────────────────── */
 function refreshAll(){
+  // Clear caches → every filter change produces fresh random numbers
+  _branchCache = {};
+  _productMap  = null;
   renderStats();
   renderBarChart();
   renderProductChart();
