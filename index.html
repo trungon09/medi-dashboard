@@ -77,13 +77,15 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; font-size:13
 .date-sep { color:rgba(255,255,255,.7); font-size:12px; }
 
 /* ── MAIN LAYOUT ─────────────────────────────── */
-.main { display:flex; align-items:stretch; }
-.content { flex:0 0 65%; min-width:0; padding:12px; display:flex; flex-direction:column; }
-.content > .card { flex:1; display:flex; flex-direction:column; margin-bottom:0; }
-.content > .card canvas { flex:1; min-height:220px; }
-.sidebar { flex:0 0 35%; min-width:0; background:#fff; border-left:1px solid #e0e0e0; padding:12px; display:flex; flex-direction:column; gap:12px; }
-.sidebar > .card { flex:1; display:flex; flex-direction:column; margin-bottom:0; }
-.sidebar > .card canvas { flex:1; min-height:120px; }
+.main { display:flex; align-items:stretch; height:620px; overflow:hidden; }
+.content { flex:0 0 66.67%; min-width:0; padding:12px; display:flex; flex-direction:column; overflow:hidden; }
+.content > .card { flex:1; display:flex; flex-direction:column; margin-bottom:0; overflow:hidden; }
+.content > .card canvas { flex:1; min-height:0; }
+.sidebar { flex:0 0 33.33%; min-width:0; background:#fff; border-left:1px solid #e0e0e0; padding:12px; display:flex; flex-direction:column; gap:10px; overflow:hidden; }
+.sidebar > .card { display:flex; flex-direction:column; margin-bottom:0; overflow:hidden; }
+.sidebar > .card:first-child { flex:3; }
+.sidebar > .card:last-child  { flex:2; }
+.sidebar > .card canvas { flex:1; min-height:0; }
 
 /* ── CARDS ───────────────────────────────────── */
 .card { background:#fff; border-radius:8px; padding:14px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
@@ -157,16 +159,16 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; font-size:13
 .page-btn.active { background:#1a5276; color:#fff; border-color:#1a5276; }
 
 /* ── SIDEBAR SPECIFIC ────────────────────────── */
-.pie-wrap { position:relative; margin:10px auto 0; width:190px; height:190px; }
+.pie-wrap { position:relative; margin:6px auto 0; width:160px; height:160px; flex-shrink:0; }
 .pie-center {
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
   text-align:center; pointer-events:none;
 }
-.pie-center .pc1 { font-size:10px; color:#888; }
-.pie-center .pc2 { font-size:15px; font-weight:900; color:#1a5276; }
-.legend-list { list-style:none; margin-top:10px; }
-.legend-item { display:flex; align-items:center; gap:6px; margin-bottom:6px; font-size:11px; }
-.legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.pie-center .pc1 { font-size:9px; color:#888; }
+.pie-center .pc2 { font-size:13px; font-weight:900; color:#1a5276; }
+.legend-list { list-style:none; margin-top:6px; overflow-y:auto; flex:1; min-height:0; }
+.legend-item { display:flex; align-items:center; gap:5px; margin-bottom:4px; font-size:11px; }
+.legend-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
 
 /* sort arrow */
 .sort-arrow { font-size:10px; margin-left:3px; }
@@ -312,8 +314,8 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; font-size:13
 <div class="sidebar">
 
   <!-- PIE CHART -->
-  <div class="card" style="margin-bottom:0;">
-    <div class="card-title" style="font-size:12px;">Top 5 chi nhánh doanh thu cao nhất</div>
+  <div class="card" style="margin-bottom:0; display:flex; flex-direction:column;">
+    <div class="card-title" style="font-size:12px; flex-shrink:0;">Top 5 chi nhánh doanh thu cao nhất</div>
     <div class="pie-wrap">
       <canvas id="pieChart"></canvas>
       <div class="pie-center">
@@ -327,7 +329,7 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#f0f2f5; font-size:13
   <!-- TOP 5 NHÂN VIÊN — vertical bar -->
   <div class="card" style="margin-bottom:0;">
     <div class="card-title" style="font-size:12px;">TOP 5 NHÂN VIÊN DOANH THU CAO NHẤT</div>
-    <canvas id="empChart" height="180"></canvas>
+    <canvas id="empChart"></canvas>
   </div>
 
 </div>
