@@ -749,7 +749,6 @@ function barOpts(){
    PRODUCT CHART
 ────────────────────────────────────────── */
 function renderProductChart(){
-  const metric = document.getElementById('productMetric').value;
   const ctx    = document.getElementById('productChart').getContext('2d');
   if(prodChartInst){ prodChartInst.destroy(); prodChartInst=null; }
 
